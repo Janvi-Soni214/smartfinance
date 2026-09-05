@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+  @theme {
+  --color-brand-primary: #0D9488;
+  --color-brand-primary-hover: #14B8A6;
+}
+
+/* Base Light Theme Tokens */
+:root {
+  --bg-app: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --border-color: rgba(0, 0, 0, 0.06);
+  --input-bg: #F1F5F9;
+}
+
+/* Unified Dark Theme Tokens */
+.dark-mode {
+  --bg-app: #0B0F17;
+  --bg-surface: #161B26;
+  --text-main: #F3F4F6;
+  --text-muted: #9CA3AF;
+  --border-color: rgba(255, 255, 255, 0.05);
+  --input-bg: rgba(11, 15, 23, 0.6);
+}
+
+/* Global Elements Configuration - Smooth Scroll Enabled */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Utility to lock layout viewport specifically on Login */
+.no-scroll-view {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Token-driven UI Utilities */
+.theme-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  transition: all 0.2s ease-in-out;
+}
+
+.theme-input:focus {
+  border-color: #14B8A6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+  outline: none;
+}
+
+/* Custom date input — hide native indicator, use our own icon instead */
+.date-no-indicator::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+
+/* Theme-aware select dropdown — matches light/dark surface */
+.theme-select {
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  transition: all 0.2s ease-in-out;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.theme-select:focus {
+  border-color: #14B8A6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+  outline: none;
+}
+
+/* Option items inside select — pick up OS theme for readability */
+.theme-select option {
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+}
+
+/* Modal close button — theme-safe hover, avoids dark: Tailwind variant issues */
+.modal-close-btn {
+  padding: 6px;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.modal-close-btn:hover {
+  background-color: rgba(100, 116, 139, 0.15); /* neutral works on both light & dark */
+}
