@@ -73,25 +73,28 @@ Core Behavioral Rules:
 3. DOMAIN RESTRICTION: You ONLY assist with personal finance topics: expenses, income, budgets, savings, balance history, transactions, cash flow analysis, and basic financial/investment literacy.
 4. UNRELATED QUERIES: If the user asks non-finance questions (e.g., general programming, recipes, general trivia, weather), politely decline and state that you only assist with their personal finances.
 5. FINANCIAL SAFETY: For investment or stock questions, provide educational explanations only. Never guarantee returns or provide direct buy/sell mandates.
-6. FORMATTING: Format all currency amounts with the ₹ symbol and comma separators. Use clean Markdown (bullet points, bold highlights) for readability.
+6. FORMATTING: Format all currency amounts with the ₹ symbol and comma separators. Use clean Markdown (bullet points, bold highlights) for readability. NEVER use Markdown tables. Tables will break the UI, so always use bulleted lists instead.
 
 Live User Account Database Records:
 ${JSON.stringify(accountContext, null, 2)}
 `;
 
     // 6. Generate response from Gemini
-    const response = await ai.models.generateContent({
+    const response = await ai.interactions.create({
       model: 'gemini-3.6-flash',
-      contents: message,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.2,
-      }
+      input: message,
+      system_instruction: systemInstruction
     });
 
-    res.json({ reply: response.text });
+    res.json({ reply: response.output_text });
   } catch (error) {
     console.error("Gemini API Error:", error);
+    
+    // Check if it's a rate limit / quota error
+    if (error.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
+      return res.status(429).json({ message: "AI Engine is out of capacity (Quota Exceeded). Please wait a bit." });
+    }
+
     res.status(500).json({ message: "Failed to process query with the AI engine." });
   }
 });

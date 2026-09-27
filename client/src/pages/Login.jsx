@@ -29,8 +29,8 @@ export default function Login({ isDark, onToggleTheme }) {
 
   // Google OAuth Login with Gmail Permissions
   const handleGoogleLogin = useGoogleLogin({
-    // 1. Request permission to read emails
-    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    // 1. Request permission to read emails along with standard profile data
+    scope: 'email profile https://www.googleapis.com/auth/gmail.readonly',
     
     // 2. When they click "Allow", capture the token and log them in
     onSuccess: async (tokenResponse) => {

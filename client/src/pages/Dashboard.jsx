@@ -7,14 +7,15 @@ import {
   LogOut, Menu, X, Sun, Moon,
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Activity, ShoppingBag, Coffee, Monitor, Search, Filter, Plus, Send,
-  ExternalLink, Clock, Camera, Shield, Bell, Key, Smartphone, Mail, Trash2
+  ExternalLink, Clock, Camera, Shield, Bell, Key, Smartphone, Mail, Trash2, Calendar, Edit2, Eye, EyeOff
 } from 'lucide-react';
+import { PieChart as RechartsPieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { io } from 'socket.io-client';
 import ReactMarkdown from 'react-markdown';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const CustomSelect = ({ value, onChange, options, icon: Icon, className }) => {
+const CustomSelect = ({ value, onChange, options, icon: Icon, className, variant }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -28,14 +29,16 @@ const CustomSelect = ({ value, onChange, options, icon: Icon, className }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const isTransparent = variant === 'transparent';
+
   return (
     <div className={`relative ${className || ''}`} ref={dropdownRef}>
       {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-50 z-10 pointer-events-none" />}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full text-left theme-input transition-all flex items-center justify-between ${Icon ? 'pl-9' : 'px-4'} pr-8 py-2.5 rounded-xl text-xs font-medium focus:outline-none cursor-pointer border`}
-        style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-color)', color: 'var(--text-main)' }}
+        className={`w-full text-left transition-all flex items-center justify-between ${Icon ? 'pl-9' : (isTransparent ? 'px-0' : 'px-4')} pr-8 py-2.5 rounded-xl text-xs font-medium focus:outline-none cursor-pointer ${isTransparent ? 'bg-transparent border-0 hover:text-teal-500' : 'theme-input border'}`}
+        style={isTransparent ? { color: 'var(--text-muted)' } : { backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-color)', color: 'var(--text-main)' }}
       >
         <span className="truncate">{value}</span>
         <svg className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-teal-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +47,7 @@ const CustomSelect = ({ value, onChange, options, icon: Icon, className }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 rounded-xl shadow-lg py-1 max-h-60 overflow-auto border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
+        <div className="absolute z-50 w-48 min-w-full mt-1 rounded-xl shadow-lg py-1 max-h-60 overflow-auto border left-0" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
           {options.map((opt) => (
             <button
               key={opt}
@@ -53,7 +56,7 @@ const CustomSelect = ({ value, onChange, options, icon: Icon, className }) => {
                 onChange(opt);
                 setIsOpen(false);
               }}
-              className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-teal-500/10 hover:text-teal-500 ${value === opt ? 'bg-teal-500/10 text-teal-500 font-semibold' : ''} cursor-pointer`}
+              className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-teal-500/10 hover:text-teal-500 ${value === opt ? 'bg-teal-500/10 text-teal-500 font-semibold' : ''} cursor-pointer break-words`}
               style={{ color: value === opt ? undefined : 'var(--text-main)' }}
             >
               {opt}
@@ -85,6 +88,19 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeMenu, setActiveMenu] = useState('Overview');
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  // Close notification panel on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Expenses Module State
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,6 +126,27 @@ export default function Dashboard({ isDark, onToggleTheme }) {
   const [profileFirstName, setProfileFirstName] = useState(firstName);
   const [profileLastName, setProfileLastName] = useState(lastName);
   const [profilePhone, setProfilePhone] = useState(storedUser?.phone || '');
+  const [profileImage, setProfileImage] = useState(storedUser?.profileImage || '');
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Categories Editing State
+  const defaultCategories = [
+    'Living expenses', 'Transportation expenses', 'Family care',
+    'Personal care', 'Health care', 'Technology', 'Debt payments',
+    'Savings and investments', 'Entertainment', 'Miscellaneous expenses'
+  ];
+  const [customCategories, setCustomCategories] = useState(storedUser?.categories || defaultCategories);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Statement Download & Reminder States
   const [showReminder, setShowReminder] = useState(false);
@@ -127,7 +164,29 @@ export default function Dashboard({ isDark, onToggleTheme }) {
   // Budget State
   const [budgets, setBudgets] = useState([]);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showPasswordCurrent, setShowPasswordCurrent] = useState(false);
+  const [showPasswordNew, setShowPasswordNew] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [showPasswordDelete, setShowPasswordDelete] = useState(false);
+
+  // Settings State
+  const [settings, setSettings] = useState(storedUser?.settings || {
+    twoFactorEnabled: false,
+    emailAlerts: true,
+    smsParsing: true
+  });
   const [newBudget, setNewBudget] = useState({ category: 'Food & Dining', limit: '' });
+
+  // Market News State
+  const [marketNews, setMarketNews] = useState([]);
+  const [isNewsLoading, setIsNewsLoading] = useState(true);
+
+  // Yearly Calendar State
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
   const menuItems = [
     { name: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -135,7 +194,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     { name: 'Budgets', icon: <Wallet className="w-4 h-4" /> },
     { name: 'AI Finance Assistant', icon: <Bot className="w-4 h-4" /> },
     { name: 'Market News', icon: <Newspaper className="w-4 h-4" /> },
-    { name: 'Import SMS', icon: <MessageSquarePlus className="w-4 h-4" /> },
+    { name: 'Yearly Calendar', icon: <Calendar className="w-4 h-4" /> },
     { name: 'Profile', icon: <User className="w-4 h-4" /> },
     { name: 'Settings', icon: <Settings className="w-4 h-4" /> }
   ];
@@ -154,6 +213,25 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       default: return <ShoppingBag className={`w-4 h-4 ${colorClass}`} />;
     }
   };
+
+  // Fetch Market News
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const response = await axios.get('http://localhost:5000/api/news', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setMarketNews(response.data);
+      } catch (err) {
+        console.error('Error fetching market news:', err);
+      } finally {
+        setIsNewsLoading(false);
+      }
+    };
+    fetchNews();
+  }, []);
 
   // Fetch Data from Backend
   useEffect(() => {
@@ -251,7 +329,8 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     };
 
     autoSyncGmail();
-    const interval = setInterval(autoSyncGmail, 60000);
+    // Check every 10 minutes instead of every minute to save Gemini API Quota!
+    const interval = setInterval(autoSyncGmail, 600000);
 
     return () => clearInterval(interval);
   }, []);
@@ -482,7 +561,8 @@ export default function Dashboard({ isDark, onToggleTheme }) {
         {
           firstName: profileFirstName,
           lastName: profileLastName,
-          phone: profilePhone
+          phone: profilePhone,
+          profileImage: profileImage
         },
         { headers: { Authorization: `Bearer ${token}` } } // Send the secure token!
       );
@@ -494,6 +574,94 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     } catch (error) {
       console.error("Error updating profile:", error);
       alert("Failed to update profile.");
+    }
+  };
+
+  const handleToggleSetting = async (settingKey) => {
+    const newSettings = { ...settings, [settingKey]: !settings[settingKey] };
+    setSettings(newSettings);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.put('http://localhost:5000/api/auth/settings', { settings: newSettings }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+    } catch (err) {
+      console.error('Error updating settings:', err);
+      setSettings(settings); // Revert on error
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert("New passwords do not match!");
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put('http://localhost:5000/api/auth/change-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert("Password changed successfully! 🎉");
+      setIsChangePasswordModalOpen(false);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to change password.");
+    }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    const confirmDelete = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone.");
+    if (!confirmDelete) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete('http://localhost:5000/api/auth/account', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { currentPassword: deletePassword }
+      });
+      alert("Account deleted successfully.");
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to delete account.");
+    }
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim() || customCategories.includes(newCategoryName.trim())) return;
+    const updated = [...customCategories, newCategoryName.trim()];
+    await updateCategoriesBackend(updated);
+    setNewCategoryName('');
+  };
+
+  const handleRemoveCategory = async (catToRemove) => {
+    const updated = customCategories.filter(c => c !== catToRemove);
+    await updateCategoriesBackend(updated);
+  };
+
+  const updateCategoriesBackend = async (newCategories) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put('http://localhost:5000/api/auth/categories', 
+        { categories: newCategories },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      setCustomCategories(newCategories);
+    } catch (error) {
+      console.error("Error updating categories:", error);
+      alert("Failed to update categories.");
     }
   };
 
@@ -628,22 +796,87 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
 
   // Dynamically Calculate Totals for Overview Cards (Forced as Numbers)
-  const totalIncome = allTransactions
-    .filter(tx => Number(tx.amount) > 0)
-    .reduce((acc, curr) => acc + Number(curr.amount), 0);
+  // Helper to parse dates securely from existing format 'YYYY-MM-DD' or 'MMM DD, YYYY'
+  const parseTxDate = (dateStr) => new Date(dateStr);
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-  const totalExpenses = allTransactions
-    .filter(tx => Number(tx.amount) < 0)
-    .reduce((acc, curr) => acc + Math.abs(Number(curr.amount)), 0);
+  let currentMonthIncome = 0;
+  let currentMonthExpenses = 0;
+  let lastMonthIncome = 0;
+  let lastMonthExpenses = 0;
+  let totalIncome = 0;
+  let totalExpenses = 0;
+
+  allTransactions.forEach(tx => {
+    const amt = Number(tx.amount);
+    const date = parseTxDate(tx.date);
+    const m = date.getMonth();
+    const y = date.getFullYear();
+
+    if (amt > 0) {
+      totalIncome += amt;
+      if (m === currentMonth && y === currentYear) currentMonthIncome += amt;
+      if (m === lastMonth && y === lastMonthYear) lastMonthIncome += amt;
+    } else {
+      const absAmt = Math.abs(amt);
+      totalExpenses += absAmt;
+      if (m === currentMonth && y === currentYear) currentMonthExpenses += absAmt;
+      if (m === lastMonth && y === lastMonthYear) lastMonthExpenses += absAmt;
+    }
+  });
 
   const currentBalance = totalIncome - totalExpenses;
 
-  const chartData = [
-    { month: 'Jan', income: 65, expense: 45 }, { month: 'Feb', income: 55, expense: 60 },
-    { month: 'Mar', income: 85, expense: 40 }, { month: 'Apr', income: 70, expense: 50 },
-    { month: 'May', income: 90, expense: 65 }, { month: 'Jun', income: 75, expense: 55 },
-    { month: 'Jul', income: 100, expense: 70 },
-  ];
+  // Calculate Trends
+  const calcTrend = (curr, last) => {
+    if (last === 0) return { val: curr > 0 ? "100%" : "0%", isPos: curr >= 0, isUp: curr >= last };
+    const diff = curr - last;
+    const pct = (diff / last) * 100;
+    return { val: `${Math.abs(pct).toFixed(1)}%`, isPos: pct >= 0, isUp: pct >= 0 };
+  };
+
+  const incomeTrend = calcTrend(currentMonthIncome, lastMonthIncome);
+  
+  // For expenses, a mathematical increase (isUp: true) is visually negative (isPos: false)
+  const expRaw = lastMonthExpenses === 0 ? (currentMonthExpenses > 0 ? 100 : 0) : ((currentMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100;
+  const expenseTrend = { val: `${Math.abs(expRaw).toFixed(1)}%`, isPos: expRaw <= 0, isUp: expRaw >= 0 };
+
+  const currentBalMon = currentMonthIncome - currentMonthExpenses;
+  const lastBalMon = lastMonthIncome - lastMonthExpenses;
+  const balTrend = calcTrend(currentBalMon, lastBalMon);
+
+  // Generate dynamic chart data (last 7 months)
+  const chartDataMap = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(currentYear, currentMonth - i, 1);
+    const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+    chartDataMap[`${d.getFullYear()}-${d.getMonth()}`] = { month: monthName, income: 0, expense: 0, rawIncome: 0, rawExpense: 0 };
+  }
+  
+  allTransactions.forEach(tx => {
+    const amt = Number(tx.amount);
+    const date = parseTxDate(tx.date);
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    if (chartDataMap[key]) {
+      if (amt > 0) chartDataMap[key].rawIncome += amt;
+      else chartDataMap[key].rawExpense += Math.abs(amt);
+    }
+  });
+
+  const rawChartData = Object.values(chartDataMap);
+  const maxVal = Math.max(...rawChartData.map(d => Math.max(d.rawIncome, d.rawExpense)), 1);
+  const chartData = rawChartData.map(d => ({
+    month: d.month,
+    income: (d.rawIncome / maxVal) * 100,
+    expense: (d.rawExpense / maxVal) * 100,
+    rawIncome: d.rawIncome || 0,
+    rawExpense: d.rawExpense || 0
+  }));
+
 
   // Dynamically calculate spending for each active budget
   const dynamicBudgets = budgets.map(budget => {
@@ -661,14 +894,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     };
   });
 
-  const marketNews = [
-    { id: 1, title: 'Global Tech Stocks Rally Amid Strong Earnings Reports', source: 'Financial Times', time: '2 hours ago', tag: 'Markets' },
-    { id: 2, title: 'Central Bank Hints at Potential Rate Cuts by Q4', source: 'Bloomberg', time: '4 hours ago', tag: 'Economy' },
-    { id: 3, title: 'Cryptocurrency Markets Stabilize After Weekend Volatility', source: 'CoinDesk', time: '5 hours ago', tag: 'Crypto' },
-    { id: 4, title: 'Housing Market Shows Signs of Cooling in Major Tech Hubs', source: 'Wall Street Journal', time: '8 hours ago', tag: 'Real Estate' },
-    { id: 5, title: 'Retail Spending Increases Despite Inflation Concerns', source: 'Reuters', time: '12 hours ago', tag: 'Economy' },
-    { id: 6, title: 'New AI Regulations Proposed by European Commission', source: 'TechCrunch', time: '14 hours ago', tag: 'Tech' },
-  ];
+  // (Hardcoded marketNews array removed in favor of real API)
 
   // Helper to match input date (YYYY-MM-DD) to Database date format (MMM DD, YYYY)
   const getFormattedFilterDate = (dateString) => {
@@ -687,29 +913,56 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     return matchesSearch && matchesCategory && matchesDate;
   });
 
-  const categories = ['All', 'Income', 'Electronics', 'Food & Dining', 'Groceries', 'Entertainment', 'Transport', 'Housing', 'Uncategorized'];
+  const categories = ['All', 'Income', ...customCategories, 'Uncategorized'];
+
+  // Calculate Yearly Data for Calendar
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const yearlyData = months.map(month => ({ name: month, amount: 0 }));
+  
+  allTransactions.forEach(tx => {
+    const txDate = new Date(tx.date);
+    if (!isNaN(txDate) && txDate.getFullYear().toString() === selectedYear) {
+      if (tx.amount < 0 || tx.category !== 'Income') { // Only count expenses
+        const monthIndex = txDate.getMonth();
+        yearlyData[monthIndex].amount += Math.abs(tx.amount);
+      }
+    }
+  });
+
+  const availableYears = [...new Set(allTransactions.map(tx => {
+    const d = new Date(tx.date);
+    return isNaN(d) ? null : d.getFullYear().toString();
+  }).filter(Boolean))].sort((a, b) => b - a);
+
+  if (availableYears.length === 0) availableYears.push(new Date().getFullYear().toString());
+
+  const COLORS = ['#14b8a6', '#0ea5e9', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#6366f1', '#d946ef', '#f43f5e'];
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const cardVariants = { hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } };
 
-  const MetricCard = ({ title, amount, trend, isPositive, icon, trendText }) => (
-    <motion.div variants={cardVariants} className="theme-panel p-5 rounded-[20px] shadow-sm flex flex-col justify-between space-y-4">
-      <div className="flex justify-between items-start">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{title}</p>
-          <h3 className="text-2xl font-black tracking-tight text-teal-500">{amount}</h3>
+  const MetricCard = ({ title, amount, trend, isPositive, isUp, icon, trendText }) => {
+    // If isUp is not provided explicitly, default to following isPositive
+    const arrowUp = isUp !== undefined ? isUp : isPositive;
+    return (
+      <motion.div variants={cardVariants} className="theme-panel p-4 sm:p-5 rounded-[20px] shadow-sm flex flex-col justify-between space-y-3 sm:space-y-4">
+        <div className="flex justify-between items-start">
+          <div className="space-y-1 min-w-0 mr-2">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{title}</p>
+            <h3 className="text-lg sm:text-2xl font-black tracking-tight text-teal-500">{amount}</h3>
+          </div>
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-teal-500/10 text-teal-500 flex items-center justify-center shrink-0">{icon}</div>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-500 flex items-center justify-center">{icon}</div>
-      </div>
-      <div className="flex items-center space-x-2 text-xs">
-        <span className={`flex items-center font-bold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-          {isPositive ? <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" /> : <ArrowDownRight className="w-3.5 h-3.5 mr-0.5" />}
-          {trend}
-        </span>
-        <span style={{ color: 'var(--text-muted)' }}>{trendText}</span>
-      </div>
-    </motion.div>
-  );
+        <div className="flex items-center space-x-1.5 text-[10px] sm:text-xs">
+          <span className={`flex items-center font-bold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+            {arrowUp ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5" />}
+            {trend}
+          </span>
+          <span style={{ color: 'var(--text-muted)' }}>{trendText}</span>
+        </div>
+      </motion.div>
+    );
+  };
 
   // const handleSendMessage = (e) => {
   //   e.preventDefault();
@@ -758,10 +1011,15 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     } catch (error) {
       console.error("AI Error:", error);
 
-      // Update the error message to handle Google's server traffic jams
-      const errorMessage = error.response?.status === 503
-        ? "The AI is currently experiencing high traffic. Please wait a few seconds and try again!"
-        : "Error: Could not connect to the AI engine. Please make sure your backend is running!";
+      let errorMessage = "Error: Could not connect to the AI engine. Please make sure your backend is running!";
+      
+      if (error.response?.status === 503) {
+        errorMessage = "The AI is currently experiencing high traffic. Please wait a few seconds and try again!";
+      } else if (error.response?.status === 429) {
+        errorMessage = "Error: Google Gemini API quota exceeded (Rate Limit). Please wait 1 minute before asking another question.";
+      } else if (error.response?.data?.message) {
+        errorMessage = `Error: ${error.response.data.message}`;
+      }
 
       setChatMessages((prev) =>
         prev.map(msg =>
@@ -802,6 +1060,25 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       console.error("Error saving budget:", error);
       alert("Failed to save budget.");
     }
+  };
+
+  const handleDeleteBudget = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this budget limit?")) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5000/api/budgets/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBudgets(prev => prev.filter(b => b._id !== id));
+    } catch (error) {
+      console.error("Error deleting budget:", error);
+      alert("Failed to delete budget.");
+    }
+  };
+
+  const handleEditBudget = (budget) => {
+    setNewBudget({ category: budget.category, limit: budget.limit });
+    setIsBudgetModalOpen(true);
   };
 
   return (
@@ -890,22 +1167,74 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
       {/* VIEWPORT CONTROLLER COLUMN WRAPPER — offset by sidebar width on desktop */}
       <div className="flex-1 flex flex-col min-w-0 relative lg:ml-64">
-        <header className="h-16 w-full border-b flex items-center justify-between px-4 md:px-6 z-30 transition-colors" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
+        <header className="h-16 w-full border-b flex items-center justify-between px-4 sm:px-6 z-30 transition-colors" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
           <div className="flex items-center space-x-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-xl theme-panel lg:hidden cursor-pointer"><Menu className="w-4 h-4" /></button>
             <h1 className="text-sm font-bold tracking-tight opacity-80">Console / <span className="text-teal-500">{activeMenu}</span></h1>
           </div>
-          <div className="hidden sm:flex items-center space-x-3 text-xs border pl-3 pr-1.5 py-1.5 rounded-xl theme-panel">
-            {/* DYNAMIC HEADER NAME & AVATAR */}
-            <span className="font-semibold opacity-80">{fullName}</span>
-            <div className="w-6 h-6 rounded-lg bg-teal-600/10 text-teal-500 font-bold flex items-center justify-center">
-              {initial}
+
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            <div className="flex items-center space-x-3 text-xs border pl-3 pr-1.5 py-1.5 rounded-xl theme-panel">
+              {/* DYNAMIC HEADER NAME & AVATAR */}
+              <span className="font-semibold opacity-80 hidden sm:inline">{fullName}</span>
+              {profileImage ? (
+                <img src={profileImage} alt="Profile" className="w-6 h-6 rounded-lg object-cover" />
+              ) : (
+                <div className="w-6 h-6 rounded-lg bg-teal-600/10 text-teal-500 font-bold flex items-center justify-center">
+                  {initial}
+                </div>
+              )}
+            </div>
+
+            {/* NOTIFICATION BELL */}
+            <div className="relative" ref={notifRef}>
+              <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                <Bell className="w-4.5 h-4.5" style={{ color: 'var(--text-muted)' }} />
+                {dynamicBudgets.some(b => b.limit > 0 && (b.spent / b.limit) >= 0.5) && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
+                )}
+              </button>
+              {isNotifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto rounded-2xl shadow-xl border z-50 p-3 space-y-2" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}>
+                  <p className="text-xs font-bold px-2 pb-2 border-b" style={{ borderColor: 'var(--border-color)' }}>Budget Alerts</p>
+                  {dynamicBudgets.filter(b => b.limit > 0 && (b.spent / b.limit) >= 0.5).length > 0 ? (
+                    dynamicBudgets.map(b => {
+                      if (b.limit <= 0) return null;
+                      const pct = (b.spent / b.limit) * 100;
+                      if (pct < 50) return null;
+                      let msg = '';
+                      let dotColor = '';
+                      if (pct >= 100) {
+                        msg = `Budget exceeded for ${b.category}!`;
+                        dotColor = 'bg-rose-500';
+                      } else if (pct >= 75) {
+                        msg = `${pct.toFixed(0)}% of ${b.category} budget used.`;
+                        dotColor = 'bg-amber-500';
+                      } else {
+                        msg = `${pct.toFixed(0)}% of ${b.category} budget used.`;
+                        dotColor = 'bg-blue-500';
+                      }
+                      return (
+                        <div key={`notif-${b.id}`} className="flex items-start space-x-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dotColor}`}></span>
+                          <div>
+                            <p className="text-xs font-semibold">{msg}</p>
+                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>₹{b.spent.toLocaleString('en-IN')} of ₹{b.limit.toLocaleString('en-IN')}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs p-3 text-center" style={{ color: 'var(--text-muted)' }}>No alerts — all budgets on track! 🎉</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* WORKSPACE VIEWPORT PANEL */}
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto z-20">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto z-20">
 
           {/* OVERVIEW MODULE */}
           {activeMenu === 'Overview' && (
@@ -918,43 +1247,46 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 </div>
               </div>
 
-              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
+              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                   title="Total Balance"
                   amount={`₹${currentBalance.toLocaleString('en-IN')}`}
-                  trend="12.5%"
-                  isPositive={true}
+                  trend={balTrend.val}
+                  isPositive={balTrend.isPos}
+                  isUp={balTrend.isUp}
                   trendText="vs last month"
                   icon={<Wallet className="w-5 h-5" />}
                 />
                 <MetricCard
                   title="Monthly Income"
-                  amount={`₹${totalIncome.toLocaleString('en-IN')}`}
-                  trend="4.2%"
-                  isPositive={true}
+                  amount={`₹${currentMonthIncome.toLocaleString('en-IN')}`}
+                  trend={incomeTrend.val}
+                  isPositive={incomeTrend.isPos}
+                  isUp={incomeTrend.isUp}
                   trendText="vs last month"
                   icon={<TrendingUp className="w-5 h-5" />}
                 />
                 <MetricCard
                   title="Monthly Expenses"
-                  amount={`₹${totalExpenses.toLocaleString('en-IN')}`}
-                  trend="1.8%"
-                  isPositive={false}
+                  amount={`₹${currentMonthExpenses.toLocaleString('en-IN')}`}
+                  trend={expenseTrend.val}
+                  isPositive={expenseTrend.isPos}
+                  isUp={expenseTrend.isUp}
                   trendText="vs last month"
                   icon={<TrendingDown className="w-5 h-5" />}
                 />
                 <MetricCard
                   title="Active Budgets"
-                  amount="3 / 5"
-                  trend="Stable"
-                  isPositive={true}
-                  trendText="All limits on track"
+                  amount={`${dynamicBudgets.length}`}
+                  trend={dynamicBudgets.some(b => b.limit > 0 && (b.spent / b.limit) >= 1) ? "Over budget" : "Stable"}
+                  isPositive={!dynamicBudgets.some(b => b.limit > 0 && (b.spent / b.limit) >= 1)}
+                  trendText="limits tracking"
                   icon={<Activity className="w-5 h-5" />}
                 />
               </motion.div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4 }} className="lg:col-span-2 theme-panel p-6 rounded-[24px] shadow-sm flex flex-col space-y-6">
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4 }} className="lg:col-span-2 theme-panel p-5 sm:p-6 rounded-[24px] shadow-sm flex flex-col space-y-6">
                   <div className="flex justify-between items-center">
                     <div>
                       <h3 className="font-bold text-sm">Cashflow Analytics</h3>
@@ -965,8 +1297,8 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                     {chartData.map((data, idx) => (
                       <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full space-y-2">
                         <div className="w-full flex justify-center items-end space-x-1 h-full">
-                          <motion.div initial={{ height: 0 }} animate={{ height: `${data.income}%` }} transition={{ duration: 0.7, delay: idx * 0.1 }} className="w-full max-w-[12px] bg-teal-500 rounded-t-sm" />
-                          <motion.div initial={{ height: 0 }} animate={{ height: `${data.expense}%` }} transition={{ duration: 0.7, delay: idx * 0.1 + 0.1 }} className="w-full max-w-[12px] bg-rose-500 rounded-t-sm" />
+                          <motion.div title={`Income: ₹${data.rawIncome.toLocaleString('en-IN')}`} initial={{ height: 0 }} animate={{ height: `${data.income}%` }} transition={{ duration: 0.7, delay: idx * 0.1 }} className="w-full max-w-[12px] bg-teal-500 rounded-t-sm" />
+                          <motion.div title={`Expense: ₹${data.rawExpense.toLocaleString('en-IN')}`} initial={{ height: 0 }} animate={{ height: `${data.expense}%` }} transition={{ duration: 0.7, delay: idx * 0.1 + 0.1 }} className="w-full max-w-[12px] bg-rose-500 rounded-t-sm" />
                         </div>
                         <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>{data.month}</span>
                       </div>
@@ -1014,8 +1346,8 @@ export default function Dashboard({ isDark, onToggleTheme }) {
           {activeMenu === 'Expenses' && (
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="max-w-7xl mx-auto space-y-6">
 
-              <div className="flex items-center space-x-3 w-full md:w-auto flex-wrap gap-y-3">
-                <div className="relative flex-1 md:w-48">
+              <div className="flex items-center flex-wrap gap-3">
+                <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-50" />
                   <input
                     type="text"
@@ -1027,13 +1359,13 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 </div>
 
                 {/* DATE FILTER with custom teal icon */}
-                <div className="relative">
+                <div className="relative flex-1 min-w-[140px]">
                   <input
                     type="date"
                     id="expenseDateFilter"
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
-                    className="pl-4 pr-9 py-2.5 rounded-xl text-xs theme-input cursor-pointer date-no-indicator"
+                    className="w-full pl-4 pr-9 py-2.5 rounded-xl text-xs theme-input cursor-pointer date-no-indicator"
                   />
                   <button
                     type="button"
@@ -1051,30 +1383,36 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                   value={categoryFilter}
                   onChange={setCategoryFilter}
                   options={categories}
-                  className="w-36"
+                  className="flex-1 min-w-[140px]"
                 />
 
-                {/* DOWNLOAD STATEMENT BUTTON */}
-                <button onClick={() => setIsDownloadModalOpen(true)} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                  <span className="hidden sm:inline">Statement</span>
-                </button>
+                {/* ACTION BUTTONS GROUP */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {/* DOWNLOAD STATEMENT BUTTON */}
+                  <button onClick={() => setIsDownloadModalOpen(true)} className="flex-1 px-3 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center whitespace-nowrap">
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span className="ml-1.5">Statement</span>
+                  </button>
 
-                {/* NEW UPDATE BALANCE BUTTON */}
-                <button onClick={() => setIsUpdateBalanceModalOpen(true)} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-2">
-                  <Wallet className="w-4 h-4" />
-                  <span className="hidden sm:inline">Update Balance</span>
-                </button>
+                  {/* UPDATE BALANCE BUTTON */}
+                  <button onClick={() => setIsUpdateBalanceModalOpen(true)} className="flex-1 px-3 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center whitespace-nowrap">
+                    <Wallet className="w-4 h-4 shrink-0" />
+                    <span className="ml-1.5">Balance</span>
+                  </button>
 
-                <button onClick={() => setIsAddModalOpen(true)} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-2">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Add New</span>
-                </button>
+                  {/* ADD NEW BUTTON */}
+                  <button onClick={() => setIsAddModalOpen(true)} className="flex-1 px-3 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center whitespace-nowrap">
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span className="ml-1.5">Add New</span>
+                  </button>
+                </div>
               </div>
 
 
               <div className="theme-panel rounded-[24px] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
+
+                {/* DESKTOP TABLE — hidden on small screens */}
+                <div className="hidden md:block">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b text-[10px] uppercase tracking-wider" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}>
@@ -1099,13 +1437,13 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                               </div>
                             </td>
                             <td className="p-4 font-medium" style={{ color: 'var(--text-muted)' }}>
-                              <select 
+                              <CustomSelect 
                                 value={tx.category} 
-                                onChange={(e) => handleUpdateTransactionCategory(tx.id, e.target.value)}
-                                className="bg-transparent outline-none cursor-pointer hover:text-teal-500 transition-colors"
-                              >
-                                {categories.filter(c => c !== 'All').map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                              </select>
+                                onChange={(val) => handleUpdateTransactionCategory(tx.id, val)}
+                                className="w-32"
+                                variant="transparent"
+                                options={categories.filter(c => c !== 'All')}
+                              />
                             </td>
                             <td className="p-4 whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{tx.date}</td>
                             <td className="p-4">
@@ -1137,6 +1475,46 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                     </tbody>
                   </table>
                 </div>
+
+                {/* MOBILE CARDS — shown only on small screens */}
+                <div className="md:hidden divide-y" style={{ borderColor: 'var(--border-color)' }}>
+                  {filteredTransactions.length > 0 ? (
+                    filteredTransactions.map((tx) => (
+                      <div key={tx.id} className="p-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-gray-800 shrink-0">
+                            {tx.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs truncate">{tx.name}</p>
+                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{tx.category} · {tx.date}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3 shrink-0">
+                          <div className="text-right">
+                            <p className={`font-black text-xs ${tx.amount > 0 ? 'text-emerald-500' : ''}`}>
+                              {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </p>
+                            <span className={`text-[9px] font-bold ${tx.amount > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {tx.amount > 0 ? 'Credit' : 'Debit'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                      No transactions found matching your criteria.
+                    </div>
+                  )}
+                </div>
+
                 <div className="p-4 border-t flex justify-between items-center text-xs" style={{ borderColor: 'var(--border-color)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Showing {filteredTransactions.length} of {allTransactions.length} entries</span>
                   <div className="flex space-x-1">
@@ -1173,19 +1551,21 @@ export default function Dashboard({ isDark, onToggleTheme }) {
           {activeMenu === 'Budgets' && (
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="max-w-7xl mx-auto space-y-6">
 
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+              <div className="flex flex-row justify-between items-end gap-4">
                 <div>
                   <h2 className="text-2xl font-extrabold tracking-tight">Budget Management</h2>
                   <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Set limits and monitor your spending across categories.</p>
                 </div>
 
-                <button onClick={() => setIsBudgetModalOpen(true)} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-2 cursor-pointer active:scale-95">
+                <button onClick={() => setIsBudgetModalOpen(true)} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-2 cursor-pointer active:scale-95 whitespace-nowrap shrink-0">
                   <Plus className="w-4 h-4" />
                   <span>Create Budget</span>
                 </button>
               </div>
 
-              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+
+              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {dynamicBudgets.map((budget) => {
                   // ... keep the rest of the progress bar code exactly the same ...
                   const percent = Math.min((budget.spent / budget.limit) * 100, 100);
@@ -1205,9 +1585,17 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                           </div>
                           <h3 className="font-bold text-sm">{budget.category}</h3>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-800" style={{ color: 'var(--text-muted)' }}>
-                          {percent.toFixed(0)}% Used
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-800" style={{ color: 'var(--text-muted)' }}>
+                            {percent.toFixed(0)}% Used
+                          </span>
+                          <button onClick={() => handleEditBudget(budget)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer" title="Edit Budget">
+                            <Edit2 className="w-3.5 h-3.5 opacity-70 hover:opacity-100" />
+                          </button>
+                          <button onClick={() => handleDeleteBudget(budget.id)} className="p-1 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors cursor-pointer" title="Delete Budget">
+                            <Trash2 className="w-3.5 h-3.5 opacity-70 hover:opacity-100" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -1240,28 +1628,52 @@ export default function Dashboard({ isDark, onToggleTheme }) {
           {/* MARKET NEWS MODULE */}
           {activeMenu === 'Market News' && (
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="max-w-7xl mx-auto space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+              <div className="flex flex-row justify-between items-end gap-4">
                 <div>
                   <h2 className="text-2xl font-extrabold tracking-tight">Market News & Insights</h2>
                   <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Stay updated with the latest macroeconomic trends and financial news.</p>
                 </div>
               </div>
-              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {marketNews.map((news) => (
-                  <motion.div key={news.id} variants={cardVariants} className="theme-panel p-6 rounded-[24px] shadow-sm flex flex-col justify-between space-y-4 group cursor-pointer hover:shadow-md transition-shadow">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-500/10 text-teal-500 uppercase tracking-wider">{news.tag}</span>
-                        <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-teal-500" />
+              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {isNewsLoading ? (
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="theme-panel p-6 rounded-[24px] shadow-sm flex flex-col justify-between space-y-4 animate-pulse">
+                      <div className="space-y-3">
+                        <div className="w-16 h-5 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
                       </div>
-                      <h3 className="font-bold text-sm leading-snug group-hover:text-teal-500 transition-colors">{news.title}</h3>
+                      <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <div className="w-20 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div className="w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] pt-4 border-t" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}>
-                      <span className="font-medium">{news.source}</span>
-                      <div className="flex items-center space-x-1"><Clock className="w-3 h-3" /><span>{news.time}</span></div>
-                    </div>
-                  </motion.div>
-                ))}
+                  ))
+                ) : marketNews.length > 0 ? (
+                  marketNews.map((news) => (
+                    <motion.div key={news.id} variants={cardVariants}>
+                      <a href={news.link} target="_blank" rel="noopener noreferrer" className="block h-full">
+                        <div className="theme-panel p-6 rounded-[24px] shadow-sm flex flex-col justify-between space-y-4 group cursor-pointer hover:shadow-md transition-shadow h-full">
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-start">
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-500/10 text-teal-500 uppercase tracking-wider">{news.tag}</span>
+                              <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-teal-500" />
+                            </div>
+                            <h3 className="font-bold text-sm leading-snug group-hover:text-teal-500 transition-colors">{news.title}</h3>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-4 border-t" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}>
+                            <span className="font-medium">{news.source}</span>
+                            <div className="flex items-center space-x-1"><Clock className="w-3 h-3" /><span>{news.time}</span></div>
+                          </div>
+                        </div>
+                      </a>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="col-span-3 py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                    No financial news available at the moment.
+                  </div>
+                )}
               </motion.div>
             </motion.div>
           )}
@@ -1333,16 +1745,27 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <h2 className="text-2xl font-extrabold tracking-tight">User Profile</h2>
                 <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Manage your personal information and account preferences.</p>
               </div>
-              <div className="theme-panel p-6 md:p-8 rounded-[24px] shadow-sm flex flex-col md:flex-row gap-8">
+              <div className="theme-panel p-5 sm:p-8 rounded-[24px] shadow-sm flex flex-col md:flex-row gap-8">
                 <div className="flex flex-col items-center space-y-4 md:w-1/3 border-b md:border-b-0 md:border-r pb-6 md:pb-0 md:pr-8" style={{ borderColor: 'var(--border-color)' }}>
                   <div className="relative">
                     {/* DYNAMIC AVATAR INITIAL */}
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-400 flex items-center justify-center text-white text-3xl font-bold shadow-lg uppercase">
-                      {initial}
-                    </div>
-                    <button className="absolute bottom-0 right-0 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md border hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" style={{ borderColor: 'var(--border-color)' }}>
+                    {profileImage ? (
+                      <img src={profileImage} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-lg" />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-teal-600 to-emerald-400 flex items-center justify-center text-white text-3xl font-bold shadow-lg uppercase">
+                        {initial}
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      id="profileImageInput" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                    />
+                    <label htmlFor="profileImageInput" className="absolute bottom-0 right-0 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md border hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer" style={{ borderColor: 'var(--border-color)' }}>
                       <Camera className="w-4 h-4 text-teal-500" />
-                    </button>
+                    </label>
                   </div>
                   <div className="text-center">
                     {/* DYNAMIC FULL NAME */}
@@ -1402,6 +1825,32 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                   </div>
                 </div>
               </div>
+
+              <div className="theme-panel p-5 sm:p-8 rounded-[24px] shadow-sm mt-6">
+                <h3 className="font-bold text-lg mb-4">Manage Categories</h3>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {customCategories.map(cat => (
+                    <div key={cat} className="flex items-center space-x-1 px-3 py-1.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-xs font-semibold">
+                      <span>{cat}</span>
+                      <button onClick={() => handleRemoveCategory(cat)} className="ml-1 hover:text-rose-500 transition-colors cursor-pointer">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={handleAddCategory} className="flex space-x-3 max-w-sm">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="New category..."
+                    className="flex-1 px-4 py-2.5 rounded-xl text-xs theme-input"
+                  />
+                  <button type="submit" disabled={!newCategoryName.trim()} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    Add
+                  </button>
+                </form>
+              </div>
             </motion.div>
           )}
 
@@ -1413,7 +1862,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Configure notifications, security, and application behavior.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Security Card */}
                 <div className="theme-panel p-6 rounded-[24px] shadow-sm space-y-5">
                   <div className="flex items-center space-x-3 mb-2 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
@@ -1426,20 +1875,23 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                         <p className="text-xs font-bold">Two-Factor Authentication</p>
                         <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Add an extra layer of security.</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-teal-500"></div>
-                      </label>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400">Coming Soon</span>
                     </div>
-                    <button
-                      className="w-full py-2.5 text-xs font-bold rounded-xl border transition-colors flex items-center justify-center space-x-2 
-                      bg-gray-100 text-gray-800 hover:bg-gray-200 
-                      dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
-                      style={{ borderColor: 'var(--border-color)' }}
-                    >
-                      <Key className="w-4 h-4" />
-                      <span>Change Password</span>
-                    </button>
+                    {storedUser?.isGoogleUser ? (
+                      <div className="w-full py-2.5 text-xs font-bold rounded-xl border flex items-center justify-center space-x-2 bg-gray-50 text-gray-400 dark:bg-gray-800/50 dark:text-gray-500 cursor-not-allowed" style={{ borderColor: 'var(--border-color)' }}>
+                        <Key className="w-4 h-4" />
+                        <span>Managed by Google</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setIsChangePasswordModalOpen(true)}
+                        className="w-full py-2.5 text-xs font-bold rounded-xl border transition-colors flex items-center justify-center space-x-2 bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 cursor-pointer"
+                        style={{ borderColor: 'var(--border-color)' }}
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>Change Password</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1452,11 +1904,11 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold">Email Alerts</p>
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Weekly reports and budget warnings.</p>
+                        <p className="text-xs font-bold">Email Parsing</p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Automatically track bank email receipts.</p>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
+                        <input type="checkbox" className="sr-only peer" checked={settings.emailAlerts} onChange={() => handleToggleSetting('emailAlerts')} />
                         <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-teal-500"></div>
                       </label>
                     </div>
@@ -1465,10 +1917,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                         <p className="text-xs font-bold">SMS Parsing</p>
                         <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Automatically track bank text messages.</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-teal-500"></div>
-                      </label>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400">Coming Soon</span>
                     </div>
                   </div>
                 </div>
@@ -1477,7 +1926,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <div className="md:col-span-2 theme-panel p-6 rounded-[24px] shadow-sm border border-rose-500/20 bg-rose-500/5">
                   <h3 className="font-bold text-sm text-rose-500 mb-2">Danger Zone</h3>
                   <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Permanently delete your account and remove all transaction data from our servers.</p>
-                  <button className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white font-bold rounded-xl text-xs transition-colors border border-rose-500/20 hover:border-rose-500 shadow-sm">
+                  <button onClick={() => setIsDeleteAccountModalOpen(true)} className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white font-bold rounded-xl text-xs transition-colors border border-rose-500/20 hover:border-rose-500 shadow-sm">
                     Delete Account
                   </button>
                 </div>
@@ -1485,53 +1934,107 @@ export default function Dashboard({ isDark, onToggleTheme }) {
             </motion.div>
           )}
 
-          {/* GMAIL SYNC MODULE */}
-          {activeMenu === 'Import SMS' && (
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
-              <div className="w-16 h-16 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center mb-4">
-                <Mail className="w-8 h-8" />
+          {/* YEARLY CALENDAR MODULE */}
+          {activeMenu === 'Yearly Calendar' && (
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="max-w-7xl mx-auto space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-2xl font-extrabold tracking-tight">Yearly Expenses Calendar</h2>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Track and visualize your total monthly expenses across the year.</p>
+                </div>
+                <div className="relative">
+                  <CustomSelect 
+                    value={selectedYear} 
+                    onChange={setSelectedYear}
+                    className="w-32"
+                    options={availableYears}
+                    icon={Calendar}
+                  />
+                </div>
               </div>
-              <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-main)' }}>Gmail Transaction Sync</h3>
-              <p className="text-sm max-w-md mb-8" style={{ color: 'var(--text-muted)' }}>
-                Securely scan your Gmail inbox for recent bank alerts and digital receipts. We will automatically extract the amounts and merchants to update your dashboard.
-              </p>
 
-              <button
-                onClick={async () => {
-                  try {
-                    const googleToken = localStorage.getItem('google_access_token');
-                    const appToken = localStorage.getItem('token');
+              {/* Mini Rectangle Boxes for Months */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+                {yearlyData.map((data, index) => (
+                  <motion.div 
+                    key={data.name} 
+                    initial={{ opacity: 0, scale: 0.9 }} 
+                    animate={{ opacity: 1, scale: 1 }} 
+                    transition={{ delay: index * 0.05 }}
+                    className="theme-panel p-4 rounded-2xl shadow-sm flex flex-col justify-center items-center text-center border hover:border-teal-500 transition-colors cursor-default"
+                    style={{ borderColor: 'var(--border-color)' }}
+                  >
+                    <span className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{data.name}</span>
+                    <span className="font-extrabold text-lg text-teal-500">
+                      ₹{data.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
 
-                    if (!googleToken) {
-                      alert("Please log out and log back in with Google to grant Email permissions.");
-                      return;
-                    }
+              {/* Charts Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                {/* Bar Chart */}
+                <div className="theme-panel p-6 rounded-[24px] shadow-sm flex flex-col items-center">
+                  <h3 className="font-bold text-sm mb-6 w-full text-left" style={{ color: 'var(--text-muted)' }}>Monthly Trend (Bar)</h3>
+                  <div className="w-full h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={yearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(value) => `₹${value / 1000}k`} />
+                        <Tooltip 
+                          cursor={{ fill: 'rgba(20, 184, 166, 0.1)' }}
+                          contentStyle={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                          formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Expenses']}
+                        />
+                        <Bar dataKey="amount" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
 
-                    alert("Scanning inbox... This might take a few seconds.");
-                    const response = await axios.post('http://localhost:5000/api/gmail/sync',
-                      { googleAccessToken: googleToken },
-                      { headers: { Authorization: `Bearer ${appToken}` } }
-                    );
-
-                    alert(response.data.message);
-                    window.location.reload(); // Reload to show new data
-                  } catch (err) {
-                    console.error(err);
-                    alert("Sync failed. Check console for details.");
-                  }
-                }}
-                className="px-6 py-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-teal-600/20 active:scale-95 cursor-pointer flex items-center gap-2"
-              >
-                Scan Inbox Now
-              </button>
-            </div>
+                {/* Pie Chart */}
+                <div className="theme-panel p-6 rounded-[24px] shadow-sm flex flex-col items-center">
+                  <h3 className="font-bold text-sm mb-6 w-full text-left" style={{ color: 'var(--text-muted)' }}>Monthly Distribution (Pie)</h3>
+                  <div className="w-full h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={yearlyData.filter(d => d.amount > 0)}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={5}
+                          dataKey="amount"
+                        >
+                          {yearlyData.filter(d => d.amount > 0).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                          formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Expenses']}
+                        />
+                        <Legend 
+                          layout="horizontal" 
+                          verticalAlign="bottom" 
+                          align="center"
+                          wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           )}
 
         </main>
       </div>
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
 
             <div className="flex justify-between items-center mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
               <h3 className="font-extrabold text-lg">New Transaction</h3>
@@ -1552,7 +2055,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>Amount (₹)</label>
-                  <input required type="number" value={newTx.amount} onChange={e => setNewTx({ ...newTx, amount: e.target.value })} className="w-full px-4 py-2.5 rounded-xl text-xs theme-input" placeholder="0.00" />
+                  <input required type="number" step="any" value={newTx.amount} onChange={e => setNewTx({ ...newTx, amount: e.target.value })} className="w-full px-4 py-2.5 rounded-xl text-xs theme-input" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>Category</label>
@@ -1575,7 +2078,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       {/* STARTING BALANCE WELCOME MODAL */}
       {showBaselineModal && (
         <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-8 shadow-2xl relative text-center border border-teal-500/20">
+          <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 sm:p-8 shadow-2xl relative text-center border border-teal-500/20 max-h-[90vh] overflow-y-auto">
 
             <div className="w-16 h-16 rounded-2xl bg-teal-500/10 text-teal-500 flex items-center justify-center mx-auto mb-4">
               <Wallet className="w-8 h-8" />
@@ -1592,6 +2095,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <input
                   required
                   type="number"
+                  step="any"
                   value={startingBalance}
                   onChange={e => setStartingBalance(e.target.value)}
                   className="w-full px-4 py-3.5 rounded-xl text-sm theme-input font-bold"
@@ -1615,7 +2119,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       {/* UPDATE BALANCE MODAL */}
       {isUpdateBalanceModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
 
             <div className="flex justify-between items-center mb-4 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
               <h3 className="font-extrabold text-lg">Update Total Balance</h3>
@@ -1633,6 +2137,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <input
                   required
                   type="number"
+                  step="any"
                   value={newTotalBalance}
                   onChange={e => setNewTotalBalance(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl text-sm theme-input font-bold"
@@ -1650,7 +2155,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       {/* DOWNLOAD STATEMENT MODAL */}
       {isDownloadModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
+          <div className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
 
             <div className="flex justify-between items-center mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
               <h3 className="font-extrabold text-lg flex items-center gap-2">
@@ -1728,7 +2233,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       {/* CREATE/EDIT BUDGET MODAL */}
       {isBudgetModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
 
             <div className="flex justify-between items-center mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
               <h3 className="font-extrabold text-lg">Set Budget Limit</h3>
@@ -1738,16 +2243,12 @@ export default function Dashboard({ isDark, onToggleTheme }) {
             <form onSubmit={handleSaveBudget} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>Category</label>
-                <select
+                <CustomSelect
                   value={newBudget.category}
-                  onChange={e => setNewBudget({ ...newBudget, category: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl text-xs theme-input appearance-none"
-                >
-                  {/* Filter out 'All' and 'Income' as they don't need expense budgets */}
-                  {categories.filter(c => c !== 'All' && c !== 'Income').map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  onChange={val => setNewBudget({ ...newBudget, category: val })}
+                  className="w-full"
+                  options={categories.filter(c => c !== 'All' && c !== 'Income')}
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -1755,6 +2256,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
                 <input
                   required
                   type="number"
+                  step="any"
                   value={newBudget.limit}
                   onChange={e => setNewBudget({ ...newBudget, limit: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl text-xs theme-input"
@@ -1764,6 +2266,80 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
               <button type="submit" className="w-full mt-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer">
                 Save Budget
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+      {/* CHANGE PASSWORD MODAL */}
+      {isChangePasswordModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="theme-panel w-full max-w-md rounded-[24px] p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
+              <h3 className="font-extrabold text-lg">Change Password</h3>
+              <button onClick={() => setIsChangePasswordModalOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>Current Password</label>
+                <div className="relative">
+                  <input required type={showPasswordCurrent ? "text" : "password"} value={passwordForm.currentPassword} onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full pl-4 pr-10 py-2.5 rounded-xl text-xs theme-input" />
+                  <button type="button" onClick={() => setShowPasswordCurrent(!showPasswordCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity">
+                    {showPasswordCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>New Password</label>
+                <div className="relative">
+                  <input required type={showPasswordNew ? "text" : "password"} value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full pl-4 pr-10 py-2.5 rounded-xl text-xs theme-input" />
+                  <button type="button" onClick={() => setShowPasswordNew(!showPasswordNew)} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity">
+                    {showPasswordNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>Confirm New Password</label>
+                <div className="relative">
+                  <input required type={showPasswordConfirm ? "text" : "password"} value={passwordForm.confirmPassword} onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full pl-4 pr-10 py-2.5 rounded-xl text-xs theme-input" />
+                  <button type="button" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity">
+                    {showPasswordConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" className="w-full mt-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer">
+                Update Password
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* DELETE ACCOUNT MODAL */}
+      {isDeleteAccountModalOpen && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-rose-50 dark:bg-[#1a0f14] border border-rose-500/30 w-full max-w-md rounded-[24px] p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 border-b border-rose-500/20 pb-4">
+              <h3 className="font-extrabold text-lg text-rose-600 dark:text-rose-500">Delete Account</h3>
+              <button onClick={() => setIsDeleteAccountModalOpen(false)} className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-500 rounded-full transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="mb-6 space-y-3 text-sm text-rose-700 dark:text-rose-400">
+              <p><strong>Warning:</strong> This action is irreversible.</p>
+              <p>All your transactions, budgets, settings, and personal data will be permanently deleted from our servers.</p>
+              <p>Please enter your current password to confirm deletion.</p>
+            </div>
+            <form onSubmit={handleDeleteAccount} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold tracking-wide uppercase text-rose-600 dark:text-rose-500">Current Password</label>
+                <div className="relative">
+                  <input required type={showPasswordDelete ? "text" : "password"} value={deletePassword} onChange={e => setDeletePassword(e.target.value)} className="w-full pl-4 pr-10 py-2.5 rounded-xl text-xs bg-white dark:bg-[#0f0a0d] border border-rose-500/30 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none text-rose-900 dark:text-rose-100" />
+                  <button type="button" onClick={() => setShowPasswordDelete(!showPasswordDelete)} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity text-rose-900 dark:text-rose-100 cursor-pointer">
+                    {showPasswordDelete ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" className="w-full mt-4 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer">
+                Permanently Delete Account
               </button>
             </form>
           </motion.div>

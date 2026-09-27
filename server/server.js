@@ -48,6 +48,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/budgets', require('./routes/budgets'));
+app.use('/api/news', require('./routes/news'));
 
 console.log("Checking URI:", process.env.MONGO_URI);
 

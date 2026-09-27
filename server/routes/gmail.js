@@ -82,7 +82,7 @@ Bank Alert Text:
 ${text}`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
+    model: 'gemini-3.8-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -126,20 +126,54 @@ router.post('/sync', verifyToken, async (req, res) => {
     // Only fetch emails received AFTER the exact second of the last sync
     const searchQuery = `in:inbox -in:sent after:${syncUnixTime} (subject:"debited" OR subject:"spent" OR subject:"paid" OR subject:"transaction" OR subject:"alert" OR subject:"receipt" OR subject:"credit" OR subject:"credited" OR subject:"txn" OR subject:"update" OR subject:"payment" OR subject:"transfer" OR subject:"a/c")`;
 
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: searchQuery,
-      maxResults: 50 // Can safely increase this since we are only fetching NEW emails
-    });
+    let allMessages = [];
+    let pageToken = undefined;
 
-    const messages = response.data.messages || [];
+    do {
+      const response = await gmail.users.messages.list({
+        userId: 'me',
+        q: searchQuery,
+        maxResults: 500, // Fetch up to 500 per page to catch up effectively
+        pageToken: pageToken
+      });
+
+      if (response.data.messages) {
+        allMessages = allMessages.concat(response.data.messages);
+      }
+      pageToken = response.data.nextPageToken;
+    } while (pageToken);
+
+    const messages = allMessages;
     if (messages.length === 0) {
       return res.status(200).json({ message: "Inbox up to date! 0 new transactions." });
     }
 
     let importedCount = 0;
+    let syncInterrupted = false;
+    let processedThisCycle = 0;
     
-   for (const msg of messages) {
+    for (const msg of messages) {
+      // 1. FAST DEDUPLICATION: Check if we've already processed this exact email before doing ANY heavy lifting.
+      const alreadySeen = await ProcessedEmail.findOne({
+        user: req.user.id,
+        gmailMessageId: msg.id,
+      });
+
+      if (alreadySeen) {
+        // We already successfully processed this email in a previous run. Skip it immediately!
+        continue;
+      }
+
+      // 2. RATE LIMIT PROTECTION: Only process a maximum of 3 new emails per cycle
+      // This uses 3 requests per minute, leaving the rest of the quota for your Chat Assistant.
+      if (processedThisCycle >= 3) {
+        console.warn("Processed 3 emails this cycle. Pausing to prevent overlap.");
+        syncInterrupted = true;
+        break;
+      }
+
+      processedThisCycle++;
+
       const emailDetails = await gmail.users.messages.get({ 
         userId: 'me', 
         id: msg.id,
@@ -153,10 +187,20 @@ router.post('/sync', verifyToken, async (req, res) => {
 
       let parsedData;
       try {
+        // Respect AI rate limits by adding a 5-second delay between processing each new email (max 12 RPM)
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
         // Pass the text through the new universal LLM parser
         parsedData = await parseEmailWithLLM(`Subject: ${subject}\n\n${body}`);
       } catch (error) {
         console.error(`⏭️ Skipping email ${msg.id}: LLM extraction or validation failed.`, error.message);
+        
+        // If we hit a rate limit (429), abort the loop for this sync run to prevent a massive queue
+        if (error.status === 429 || error.message.includes('429')) {
+          console.warn("API Rate limit hit during sync. Pausing until next cycle.");
+          syncInterrupted = true;
+          break;
+        }
         continue;
       }
 
@@ -170,15 +214,7 @@ router.post('/sync', verifyToken, async (req, res) => {
 
       // C. PERMANENT DEDUPLICATION — check the seen-log, not the Transaction collection.
       // This means deleting a transaction from the dashboard will NOT cause a re-import.
-      const alreadySeen = await ProcessedEmail.findOne({
-        user: req.user.id,
-        gmailMessageId: msg.id,
-      });
-
-      if (alreadySeen) {
-        console.log(`⏭️ Already processed email ${msg.id}, skipping.`);
-        continue;
-      }
+      // (We already checked msg.id at the top, so we know it's not seen yet.)
 
       // D. SAVE THE CLEAN RECORD
       const newTx = new Transaction({
@@ -221,8 +257,10 @@ router.post('/sync', verifyToken, async (req, res) => {
 
     // 4. Update the sync clock! (Problems 1, 3, & 4)
     // Now that we caught up, set the clock to right now so the next run only gets future emails.
-    user.lastEmailSync = new Date();
-    await user.save();
+    if (!syncInterrupted) {
+      user.lastEmailSync = new Date();
+      await user.save();
+    }
 
     res.status(200).json({ message: `Successfully imported ${importedCount} transactions from Gmail!` });
 

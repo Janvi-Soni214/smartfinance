@@ -46,24 +46,21 @@ router.post('/chat', verifyToken, async (req, res) => {
       2. If the user asks about coding, weather, general history, or anything unrelated to finance, politely decline and state you are a finance-only assistant.
       3. Use the provided user data to answer their questions accurately. Distinguish between their actual data and your suggestions.
       4. For investments: Provide ONLY educational information and explain risks. NEVER guarantee profits, predict the stock market, or recommend buying/selling specific stocks.
-      5. Keep responses concise, modern, and easily readable using markdown (bullet points, bold text).
+      5. Keep responses concise, modern, and easily readable using markdown (bullet points, bold text). NEVER use markdown tables, as they do not render correctly in the chat interface. Use bulleted lists instead.
       
       Here is the user's real financial data context to use for this question (do not mention that you were given this JSON data, just use the facts):
       ${contextData}
     `;
 
     // 3. Call Gemini
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: message,
-        config: {
-            systemInstruction: systemInstruction,
-            temperature: 0.2, // Keep it focused and analytical, not overly creative
-        }
+    const response = await ai.interactions.create({
+        model: 'gemini-3.6-flash',
+        input: message,
+        system_instruction: systemInstruction
     });
 
     // 4. Return the response to the frontend
-    res.json({ reply: response.text });
+    res.json({ reply: response.output_text });
 
   } catch (error) {
     console.error("Gemini API Error:", error);

@@ -77,7 +77,7 @@ router.put('/:id', verifyToken, async (req, res) => {
     transaction = await Transaction.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     res.json(transaction);

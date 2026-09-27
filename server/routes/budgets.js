@@ -24,7 +24,7 @@ router.post('/', verifyToken, async (req, res) => {
     const budget = await Budget.findOneAndUpdate(
       { user: userId, category: category },
       { limit: limit },
-      { new: true, upsert: true } 
+      { returnDocument: 'after', upsert: true } 
     );
 
     res.json(budget);

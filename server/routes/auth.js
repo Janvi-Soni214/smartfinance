@@ -53,7 +53,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email }
+      user: { id: user._id, name: user.name, email: user.email, categories: user.categories, profileImage: user.profileImage }
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -92,11 +92,11 @@ router.post('/google', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email }
+      user: { id: user._id, name: user.name, email: user.email, categories: user.categories, profileImage: user.profileImage, isGoogleUser: true }
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Google authentication failed' });
+    res.status(500).json({ message: 'Google authentication failed', error: err.message });
   }
 });
 
@@ -104,7 +104,7 @@ router.post('/google', async (req, res) => {
 // @desc    Update user profile details (Name & Phone)
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { firstName, lastName, phone } = req.body;
+    const { firstName, lastName, phone, profileImage } = req.body;
     
     // Combine first and last name back together
     const fullName = `${firstName} ${lastName}`.trim();
@@ -116,16 +116,117 @@ router.put('/profile', auth, async (req, res) => {
     // Update fields
     user.name = fullName || user.name;
     user.phone = phone !== undefined ? phone : user.phone;
+    if (profileImage !== undefined) {
+      user.profileImage = profileImage;
+    }
 
     await user.save();
 
     // Send the updated user back to React
     res.json({
-      user: { id: user._id, name: user.name, email: user.email, phone: user.phone }
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, categories: user.categories, profileImage: user.profileImage }
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error updating profile' });
   }
 });
+
+// @route   PUT /api/auth/categories
+// @desc    Update user's expense categories
+router.put('/categories', auth, async (req, res) => {
+  try {
+    const { categories } = req.body;
+    
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.categories = categories || user.categories;
+    await user.save();
+
+    res.json({
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, categories: user.categories, profileImage: user.profileImage }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error updating categories' });
+  }
+});
+
+// @route   PUT /api/auth/settings
+// @desc    Update user settings
+router.put('/settings', auth, async (req, res) => {
+  try {
+    const { settings } = req.body;
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.settings = { ...user.settings, ...settings };
+    await user.save();
+
+    res.json({
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, categories: user.categories, profileImage: user.profileImage, settings: user.settings }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error updating settings' });
+  }
+});
+
+// @route   PUT /api/auth/change-password
+// @desc    Change user password
+router.put('/change-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Validate current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error changing password' });
+  }
+});
+
+// @route   DELETE /api/auth/account
+// @desc    Delete user account and all associated data
+router.delete('/account', auth, async (req, res) => {
+  try {
+    const { currentPassword } = req.body;
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Validate password before deletion
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect password' });
+
+    // Delete user's transactions, budgets, and processed emails
+    const Transaction = require('../models/Transaction');
+    const Budget = require('../models/Budget');
+    const ProcessedEmail = require('../models/ProcessedEmail');
+    
+    await Transaction.deleteMany({ userId: user._id });
+    await Budget.deleteMany({ userId: user._id });
+    await ProcessedEmail.deleteMany({ userId: user._id });
+
+    await User.findByIdAndDelete(req.user.id);
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error deleting account' });
+  }
+});
+
 module.exports = router;
