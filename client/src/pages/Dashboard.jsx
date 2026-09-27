@@ -220,7 +220,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const response = await axios.get('http://localhost:5000/api/news', {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/news`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setMarketNews(response.data);
@@ -240,7 +240,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
         const token = localStorage.getItem('token'); // <-- Get the token
 
         // Pass the token in the headers
-        const response = await axios.get('http://localhost:5000/api/transactions', {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -274,7 +274,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const response = await axios.get('http://localhost:5000/api/budgets', {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/budgets`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setBudgets(response.data);
@@ -312,7 +312,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       if (googleToken && appToken && currentUser?.email) {
         console.log(`🔄 Background Gmail Sync Started for ${currentUser.email}...`);
         try {
-          const response = await axios.post('http://localhost:5000/api/gmail/sync',
+          const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/gmail/sync`,
             { googleAccessToken: googleToken },
             { headers: { Authorization: `Bearer ${appToken}` } }
           );
@@ -338,7 +338,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
   // 🔥 REAL-TIME SOCKET.IO LISTENER 🔥
   useEffect(() => {
     // Connect to the backend
-    const socket = io('http://localhost:5000');
+    const socket = io(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}`);
 
     // Extract user ID (Check if your DB uses _id or id)
     const userId = storedUser?._id || storedUser?.id;
@@ -425,7 +425,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
       // POST to backend
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/transactions', payload, {
+      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -465,7 +465,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       };
 
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/transactions', payload, {
+      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -495,7 +495,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       };
 
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/transactions', payload, {
+      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -519,7 +519,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       const token = localStorage.getItem('token'); // <-- Get the token
 
       // Pass the token in the headers object
-      await axios.delete(`http://localhost:5000/api/transactions/${id}`, {
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -542,7 +542,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
         return tx;
       }));
 
-      await axios.put(`http://localhost:5000/api/transactions/${id}`, { category: newCategory }, {
+      await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/transactions/${id}`, { category: newCategory }, {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
@@ -557,7 +557,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     try {
       const token = localStorage.getItem('token');
 
-      const response = await axios.put('http://localhost:5000/api/auth/profile',
+      const response = await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/profile`,
         {
           firstName: profileFirstName,
           lastName: profileLastName,
@@ -583,7 +583,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.put('http://localhost:5000/api/auth/settings', { settings: newSettings }, {
+      const res = await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/settings`, { settings: newSettings }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       localStorage.setItem('user', JSON.stringify(res.data.user));
@@ -601,7 +601,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     }
     try {
       const token = localStorage.getItem('token');
-      await axios.put('http://localhost:5000/api/auth/change-password', {
+      await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/change-password`, {
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword
       }, {
@@ -623,7 +623,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete('http://localhost:5000/api/auth/account', {
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/account`, {
         headers: { Authorization: `Bearer ${token}` },
         data: { currentPassword: deletePassword }
       });
@@ -653,7 +653,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
   const updateCategoriesBackend = async (newCategories) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.put('http://localhost:5000/api/auth/categories', 
+      const response = await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/categories`, 
         { categories: newCategories },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -993,7 +993,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
       const token = localStorage.getItem('token');
 
       // 3. Send the secure request to your Node.js backend AI route
-      const response = await axios.post('http://localhost:5000/api/ai/chat',
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/chat`,
         {
           message: userText,
           intent: 'GENERAL'
@@ -1040,7 +1040,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5000/api/budgets',
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/budgets`,
         { category: newBudget.category, limit: Number(newBudget.limit) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1066,7 +1066,7 @@ export default function Dashboard({ isDark, onToggleTheme }) {
     if (!window.confirm("Are you sure you want to delete this budget limit?")) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/budgets/${id}`, {
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/budgets/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBudgets(prev => prev.filter(b => b._id !== id));

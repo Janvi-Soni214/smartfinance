@@ -27,7 +27,7 @@ export default function Register({ isDark, onToggleTheme }) {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/register`, {
         fullName: fullName,
         email: email,
         password: password,
@@ -46,7 +46,7 @@ export default function Register({ isDark, onToggleTheme }) {
   const loginWithGoogle = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
-        const response = await axios.post('http://localhost:5000/api/auth/google', {
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/google`, {
           access_token: tokenResponse.access_token
         });
         
